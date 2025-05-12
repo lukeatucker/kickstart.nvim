@@ -2,9 +2,7 @@
 --
 -- Shows how to use the DAP plugin to debug your code.
 --
--- Primarily focused on configuring the debugger for Go, but can
--- be extended to other languages as well. That's why it's called
--- kickstart.nvim and not kitchen-sink.nvim ;)
+-- Configured for Go and C++ debugging
 
 return {
   -- NOTE: Yes, you can install new plugins here!
@@ -23,6 +21,9 @@ return {
 
     -- Add your own debuggers here
     'leoluz/nvim-dap-go',
+
+    -- Optional but recommended for C++ development
+    'theHamsta/nvim-dap-virtual-text', -- Shows variable values inline
   },
   keys = {
     -- Basic debugging keymaps, feel free to change to your liking!
@@ -81,6 +82,11 @@ return {
     local dap = require 'dap'
     local dapui = require 'dapui'
 
+    -- Optional: set up nvim-dap-virtual-text if added to dependencies
+    pcall(function()
+      require('nvim-dap-virtual-text').setup()
+    end)
+
     require('mason-nvim-dap').setup {
       -- Makes a best effort to setup the various debuggers with
       -- reasonable debug configurations
@@ -95,6 +101,7 @@ return {
       ensure_installed = {
         -- Update this to ensure that you have the debuggers for the langs you want
         'delve',
+        'cpptools', -- Add cpptools for C/C++ debugging
       },
     }
 
@@ -120,18 +127,6 @@ return {
       },
     }
 
-    -- Change breakpoint icons
-    -- vim.api.nvim_set_hl(0, 'DapBreak', { fg = '#e51400' })
-    -- vim.api.nvim_set_hl(0, 'DapStop', { fg = '#ffcc00' })
-    -- local breakpoint_icons = vim.g.have_nerd_font
-    --     and { Breakpoint = '', BreakpointCondition = '', BreakpointRejected = '', LogPoint = '', Stopped = '' }
-    --   or { Breakpoint = '●', BreakpointCondition = '⊜', BreakpointRejected = '⊘', LogPoint = '◆', Stopped = '⭔' }
-    -- for type, icon in pairs(breakpoint_icons) do
-    --   local tp = 'Dap' .. type
-    --   local hl = (type == 'Stopped') and 'DapStop' or 'DapBreak'
-    --   vim.fn.sign_define(tp, { text = icon, texthl = hl, numhl = hl })
-    -- end
-
     dap.listeners.after.event_initialized['dapui_config'] = dapui.open
     dap.listeners.before.event_terminated['dapui_config'] = dapui.close
     dap.listeners.before.event_exited['dapui_config'] = dapui.close
@@ -144,5 +139,49 @@ return {
         detached = vim.fn.has 'win32' == 0,
       },
     }
+
+    -- C++ / C configuration
+    dap.adapters.cppdbg = {
+      id = 'cppdbg',
+      type = 'executable',
+      command = vim.fn.stdpath 'data' .. '/mason/packages/cpptools/extension/debugAdapters/bin/OpenDebugAD7',
+    }
+
+    dap.configurations.cpp = {
+      {
+        name = 'Launch file',
+        type = 'cppdbg',
+        request = 'launch',
+        program = function()
+          return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/', 'file')
+        end,
+        cwd = '${workspaceFolder}',
+        stopOnEntry = false,
+        setupCommands = {
+          {
+            text = '-enable-pretty-printing',
+            description = 'enable pretty printing',
+            ignoreFailures = false,
+          },
+        },
+      },
+      {
+        name = 'Attach to gdbserver',
+        type = 'cppdbg',
+        request = 'launch',
+        MIMode = 'gdb',
+        miDebuggerServerAddress = function()
+          return vim.fn.input('GDB server address (e.g. localhost:1234): ', 'localhost:1234')
+        end,
+        miDebuggerPath = '/usr/bin/gdb',
+        cwd = '${workspaceFolder}',
+        program = function()
+          return vim.fn.input('Path to executable: ', vim.fn.getcwd() .. '/', 'file')
+        end,
+      },
+    }
+
+    -- Clone the configurations for C
+    dap.configurations.c = dap.configurations.cpp
   end,
 }
